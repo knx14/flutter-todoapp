@@ -4,6 +4,12 @@ import 'dart:convert'; // JSONエンコード/デコード用
 import 'package:uuid/uuid.dart'; // 一意なID生成用
 import 'models/todo_item.dart'; // 作成したモデルをインポート
 
+enum TodoFilter {
+  all,
+  incomplete,
+  completed,
+}
+
 void main() {
   // アプリケーションの開始
   runApp(const TodoApp());
@@ -39,7 +45,18 @@ class _TodoListScreenState extends State<TodoListScreen> {
   // 状態（State）として管理するToDoアイテムのリスト
   List<TodoItem> _todos = [];
   final Uuid _uuid = const Uuid(); // ID生成器
-
+  TodoFilter _currentFilter = TodoFilter.all;
+  List<TodoItem> get _filteredTodos {
+    switch (_currentFilter) {
+      case TodoFilter.incomplete:
+       return _todos.where((todo) => !todo.isDone).toList();
+      case TodoFilter.completed:
+       return _todos.where((todo) => todo.isDone).toList();
+      case TodoFilter.all:
+       default:
+        return _todos;
+    }
+  }
   @override
   void initState() {
     super.initState();
@@ -128,6 +145,26 @@ class _TodoListScreenState extends State<TodoListScreen> {
     _saveTodos();
   }
 
+  //Todoフィルタリング
+  void _setFilter(TodoFilter filter) {
+    setState(() {
+      _currentFilter = filter;
+    });
+  }
+
+  // 空の状態に応じたメッセージを取得
+  String _getEmptyMessage() {
+    switch (_currentFilter) {
+      case TodoFilter.incomplete:
+        return '未完了のタスクがありません！';
+      case TodoFilter.completed:
+        return '完了したタスクがありません！';
+      case TodoFilter.all:
+      default:
+        return 'タスクがありません！追加しましょう 😊';
+    }
+  }
+
 
   // ------------------------------------------------
   // UI - タスク追加用のダイアログ表示
@@ -212,14 +249,49 @@ class _TodoListScreenState extends State<TodoListScreen> {
       appBar: AppBar(
         title: const Text('ToDoリスト'),
         elevation: 10,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48.0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: SegmentedButton<TodoFilter>(
+              segments: const <ButtonSegment<TodoFilter>>[
+               ButtonSegment<TodoFilter>(value: TodoFilter.all, label: Text('すべて')),
+               ButtonSegment<TodoFilter>(value: TodoFilter.incomplete, label: Text('未完了')),
+               ButtonSegment<TodoFilter>(value: TodoFilter.completed, label: Text('完了')),
+              ],
+              selected: {_currentFilter},
+              onSelectionChanged: (Set<TodoFilter> newSelection) {
+                _setFilter(newSelection.first);
+              },
+            ),
+          ),
+        ),
       ),
+    
       // リスト表示部分
-      body: _todos.isEmpty
-          ? const Center(child: Text('タスクがありません！追加しましょう 😊'))
+      body: _filteredTodos.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _getEmptyMessage(),
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  if (_currentFilter != TodoFilter.all)
+                    const SizedBox(height: 8),
+                  if (_currentFilter != TodoFilter.all)
+                    TextButton(
+                      onPressed: () => _setFilter(TodoFilter.all),
+                      child: const Text('すべてのタスクを表示'),
+                    ),
+                ],
+              ),
+            )
           : ListView.builder(
-              itemCount: _todos.length,
+              itemCount: _filteredTodos.length,
               itemBuilder: (context, index) {
-                final todo = _todos[index];
+                final todo = _filteredTodos[index];
                 return ListTile(
                   // 完了チェックボックス
                   leading: Checkbox(
