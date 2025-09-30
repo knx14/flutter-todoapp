@@ -57,6 +57,11 @@ class _TodoListScreenState extends State<TodoListScreen> {
         return _todos;
     }
   }
+  //Todoタスクを完了したときにタイトルを削除するときに利用するアニメーション
+  final Map<String, double> _opacityMap = {};
+  static const Duration _animationDuration = Duration(milliseconds: 400);
+  static const Duration _removalDelay = Duration(milliseconds: 700);
+
   @override
   void initState() {
     super.initState();
@@ -124,12 +129,34 @@ class _TodoListScreenState extends State<TodoListScreen> {
   // ------------------------------------------------
 
   void _toggleTodoStatus(TodoItem todo) {
+    if (todo.isDone) {
+      setState(() {
+        todo.isDone = false;
+        _opacityMap.remove(todo.id);
+      });
+      _saveTodos();
+      return;
+    }
     setState(() {
-      // 1. 完了状態を反転
-      todo.isDone = !todo.isDone;
+      todo.isDone = true;
+      _opacityMap[todo.id] = 0.0;
     });
-    // 2. 変更を保存
     _saveTodos();
+  
+    //フィードバックメッセージの表示
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('タスク「${todo.title}」を完了しました！'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    //アニメーション完了を待ってからリストから削除する遅延処理
+    Future.delayed(_removalDelay, () {
+      if (!mounted) return;
+      _deleteTodo(todo.id);
+      _opacityMap.remove(todo.id);
+    });
   }
 
   // ------------------------------------------------
@@ -292,9 +319,11 @@ class _TodoListScreenState extends State<TodoListScreen> {
               itemCount: _filteredTodos.length,
               itemBuilder: (context, index) {
                 final todo = _filteredTodos[index];
-                return ListTile(
-                  // 完了チェックボックス
-                  leading: Checkbox(
+                return AnimatedOpacity(
+                  opacity: _opacityMap.containsKey(todo.id) ? _opacityMap[todo.id]! : 1.0,
+                  duration: _animationDuration,
+                  child: ListTile(
+                   leading: Checkbox(
                     value: todo.isDone,
                     onChanged: (bool? newValue) {
                       _toggleTodoStatus(todo);
@@ -319,6 +348,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
                     // TODO: タスク編集ダイアログを表示するロジックをここに追加
                     _showEditTodoDialog(todo);
                   },
+                ),
                 );
               },
             ),
