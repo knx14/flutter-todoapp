@@ -19,6 +19,15 @@ Map<String, dynamic> toMap() {
         'isDone': isDone,
     };
 }
+
+//JSONエンコード用のメソッド（toMapと同じ内容）
+Map<String, dynamic> toJson() {
+    return {
+        'id': id,
+        'title': title,
+        'isDone': isDone,
+    };
+}
 //MapからTodoItemオブジェクトを生成する
 factory TodoItem.fromJson(Map<String, dynamic> json) {
     return TodoItem(

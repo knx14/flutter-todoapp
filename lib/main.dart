@@ -2,35 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert'; // JSONエンコード/デコード用
 import 'package:uuid/uuid.dart'; // 一意なID生成用
-import 'models/todo_item.dart'; 
+import 'models/todo_item.dart'; // 作成したモデルをインポート
 
 void main() {
+  // アプリケーションの開始
   runApp(const TodoApp());
 }
 
 class TodoApp extends StatelessWidget {
   const TodoApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffodl(
-        appBar(
-          title: text('To Do App'),
-        ),
-      )
-      title: 'To Do App',
+      title: 'Flutter ToDo App',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.red,
       ),
-      home: const TodoListScreen(),
+      home: const TodoListScreen(), // メイン画面
     );
   }
 }
-//-----------------------------------------
-//Todoリストのメイン画面
-//-----------------------------------------
+
+// ------------------------------------------------
+// ToDoリストのメイン画面
+// ------------------------------------------------
+
 class TodoListScreen extends StatefulWidget {
   const TodoListScreen({super.key});
 
@@ -39,86 +36,226 @@ class TodoListScreen extends StatefulWidget {
 }
 
 class _TodoListScreenState extends State<TodoListScreen> {
+  // 状態（State）として管理するToDoアイテムのリスト
   List<TodoItem> _todos = [];
-  final Uuid _uuid = const Uuid();
-  
+  final Uuid _uuid = const Uuid(); // ID生成器
+
   @override
   void initState() {
     super.initState();
-    _loadTodos();
+    _loadTodos(); // 画面が作成されたときに保存されたデータを読み込む
   }
-//-----------------------------------------
-//データの永続化
-//-----------------------------------------
-  Furure<void> _loadTodos() async {
-    final prefs = await SharePreferences.getInstance();
+
+  // ------------------------------------------------
+  // データの永続化 (shared_preferences)
+  // ------------------------------------------------
+
+  // 1. ToDoリストの読み込み（Read）
+  Future<void> _loadTodos() async {
+    final prefs = await SharedPreferences.getInstance();
+    // 'todos'というキーで保存されたJSON文字列を取得
     final String? todosJson = prefs.getString('todos');
 
     if (todosJson != null) {
+      // JSON文字列をList<Map>にデコード
       final List<dynamic> decodedList = jsonDecode(todosJson);
-      
-  void _loadTodos() async {
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+      setState(() {
+        // List<Map>をList<TodoItem>に変換して状態を更新
+        _todos = decodedList
+            .map((item) => TodoItem.fromJson(item as Map<String, dynamic>))
+            .toList();
+      });
+    }
   }
+
+  // 2. ToDoリストの保存（Persistence）
+  Future<void> _saveTodos() async {
+    final prefs = await SharedPreferences.getInstance();
+    // List<TodoItem>をList<Map>に変換
+    final List<Map<String, dynamic>> mapList =
+        _todos.map((todo) => todo.toJson()).toList();
+    
+    // List<Map>をJSON文字列にエンコード
+    final String todosJson = jsonEncode(mapList);
+
+    // JSON文字列を 'todos' キーで保存
+    await prefs.setString('todos', todosJson);
+  }
+
+  // ------------------------------------------------
+  // ToDoの追加 (Create)
+  // ------------------------------------------------
+
+  void _addTodo(String title) {
+    if (title.isEmpty) return; // 空のタスクは追加しない
+
+    setState(() {
+      // 1. 新しいTodoItemを作成（ユニークIDを生成）
+      final newTodo = TodoItem(
+        id: _uuid.v4(),
+        title: title,
+      );
+      // 2. リストに追加
+      _todos.add(newTodo);
+    });
+    // 3. 変更を保存
+    _saveTodos();
+  }
+  
+  // ------------------------------------------------
+  // ToDoの状態変更 (Update)
+  // ------------------------------------------------
+
+  void _toggleTodoStatus(TodoItem todo) {
+    setState(() {
+      // 1. 完了状態を反転
+      todo.isDone = !todo.isDone;
+    });
+    // 2. 変更を保存
+    _saveTodos();
+  }
+
+  // ------------------------------------------------
+  // ToDoの削除 (Delete)
+  // ------------------------------------------------
+  
+  void _deleteTodo(String id) {
+    setState(() {
+      // 1. IDが一致するTodoをリストから削除
+      _todos.removeWhere((todo) => todo.id == id);
+    });
+    // 2. 変更を保存
+    _saveTodos();
+  }
+
+
+  // ------------------------------------------------
+  // UI - タスク追加用のダイアログ表示
+  // ------------------------------------------------
+
+  Future<void> _showAddTodoDialog() async {
+    TextEditingController controller = TextEditingController();
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('新しいタスクを追加'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'タスク名を入力'),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('キャンセル'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('追加'),
+              onPressed: () {
+                _addTodo(controller.text); // タスク追加処理を実行
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditTodoDialog(TodoItem todo) async {
+    TextEditingController controller = TextEditingController(text: todo.title);
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('タスクを編集する'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'タスク名を入力'),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('キャンセル'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('保存'),
+              onPressed: () {
+                setState(() {
+                  todo.title = controller.text;
+                });
+                _saveTodos(); // 変更を保存
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ------------------------------------------------
+  // UI - 画面の描画
+  // ------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('ToDoリスト'),
+        elevation: 10,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      // リスト表示部分
+      body: _todos.isEmpty
+          ? const Center(child: Text('タスクがありません！追加しましょう 😊'))
+          : ListView.builder(
+              itemCount: _todos.length,
+              itemBuilder: (context, index) {
+                final todo = _todos[index];
+                return ListTile(
+                  // 完了チェックボックス
+                  leading: Checkbox(
+                    value: todo.isDone,
+                    onChanged: (bool? newValue) {
+                      _toggleTodoStatus(todo);
+                    },
+                  ),
+                  // タスクのタイトル
+                  title: Text(
+                    todo.title,
+                    style: TextStyle(
+                      // 完了していたら打ち消し線を入れる
+                      decoration: todo.isDone ? TextDecoration.lineThrough : null,
+                      color: todo.isDone ? Colors.grey : Colors.black,
+                    ),
+                  ),
+                  // 削除ボタン
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => _deleteTodo(todo.id),
+                  ),
+                  // タスク編集機能は、このListTileの onTap に実装できます
+                  onTap: () {
+                    // TODO: タスク編集ダイアログを表示するロジックをここに追加
+                    _showEditTodoDialog(todo);
+                  },
+                );
+              },
             ),
-          ],
-        ),
-      ),
+      
+      // タスク追加ボタン
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
+        onPressed: _showAddTodoDialog, // ダイアログ表示
         child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      ),
     );
   }
 }
